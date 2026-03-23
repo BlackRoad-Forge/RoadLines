@@ -1,5 +1,13 @@
 # RoadLines
 
+> MOSAIC operating system model and checker
+
+Part of the [BlackRoad OS](https://blackroad.io) ecosystem. Forked from [`jiangyy/mosaic`](https://github.com/jiangyy/mosaic).
+
+---
+
+# RoadLines
+
 **OS Model Checker for BlackRoad Infrastructure**
 
 RoadLines is a formal verification tool for operating system models. It exhaustively explores all possible execution states — concurrency bugs, crash recovery, race conditions, TOCTTOU — and proves correctness or finds violations.
@@ -31,9 +39,11 @@ def main():
     pid = sys_fork()
     sys_sched()
     if pid == 0:
-        sys_write('World\n')
+        sys_write('World
+')
     else:
-        sys_write('Hello\n')
+        sys_write('Hello
+')
 ```
 
 ## System Calls
