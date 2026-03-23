@@ -1,66 +1,84 @@
-# MOSAIC Operating System Model and Checker
+# RoadLines
 
-This is the artifact for Paper #202 of USENIX ATC'23 "The Hitchhiker’s Guide to Operating Systems". (Cherry-picked from the backend of my [course homepage](http://jyywiki.cn/OS/2023/build/lect4.ipynb).)
+**OS Model Checker for BlackRoad Infrastructure**
 
-- [mosaic.py](mosaic.py) - The model checker (zero dependency; self-documented)
-- [vis/](vis/) - The visualization script of an interactive state space explorer
-- [examples/](examples/) - The code examples evaluated in the paper
+RoadLines is a formal verification tool for operating system models. It exhaustively explores all possible execution states — concurrency bugs, crash recovery, race conditions, TOCTTOU — and proves correctness or finds violations.
 
-## The Operating System Model
+Zero dependencies. 500 lines of Python. Runs anywhere.
 
-MOSAIC supports simple applications with "system calls". The program entry is `main()`:
+## Usage
+
+```bash
+# Run a model (random execution trace)
+python3 roadlines.py --run examples/hello.py
+
+# Model-check (exhaustive state space exploration)
+python3 roadlines.py --check examples/hello.py
+
+# Find all possible outputs
+python3 roadlines.py --check examples/hello.py | grep stdout | sort | uniq
+
+# Interactive state explorer
+python3 roadlines.py --check examples/hello.py | python3 -m vis
+```
+
+## Writing Models
+
+RoadLines models are Python programs with system calls. Entry point is `main()`:
 
 ```python
 def main():
     pid = sys_fork()
-    sys_sched()  # non-deterministic context switch
+    sys_sched()
     if pid == 0:
         sys_write('World\n')
     else:
         sys_write('Hello\n')
 ```
 
-MOSAIC can interpret these system calls, or model-check it:
+## System Calls
 
-    python3 mosaic.py --run foo.py
-    python3 mosaic.py --check bar.py
+| Call | Behavior |
+|------|----------|
+| `sys_fork()` | Clone current thread with copied heap |
+| `sys_spawn(f, xs)` | Spawn heap-sharing thread executing `f(xs)` |
+| `sys_write(xs)` | Write string to shared console |
+| `sys_bread(k)` | Read block `k` from storage |
+| `sys_bwrite(k, v)` | Write `(k, v)` to storage buffer |
+| `sys_sync()` | Persist all buffered writes |
+| `sys_sched()` | Non-deterministic context switch |
+| `sys_choose(xs)` | Non-deterministic choice from `xs` |
+| `sys_crash()` | Non-deterministic crash (partial persist) |
 
-A JSON file (state transition graph) will be printed to stdout.
-The output (state transition graph) can be piped to another tool, e.g., a
-visualization tool:
+## Examples
 
+| File | What it tests |
+|------|---------------|
+| `hello.py` | Fork + schedule ordering |
+| `parallel-inc.py` | Race condition on shared counter |
+| `cond-var.py` | Condition variable correctness |
+| `fork-buf.py` | Fork with buffered I/O |
+| `tocttou.py` | Time-of-check/time-of-use bug |
+| `fs-crash.py` | File system crash consistency |
+| `xv6-log.py` | xv6 log-based crash recovery |
+
+## How It Works
+
+The OS model is a state machine driven by system calls. Each system call returns all possible non-deterministic choices. The checker does BFS over the full state space, hashing states to avoid revisiting.
+
+Programs are rewritten at the AST level — `sys_xxx()` calls become `yield` expressions, turning functions into generators. The OS can then freeze, serialize, and replay any thread at any point.
+
+## Requirements
+
+Python 3.10+ (tested on 3.10, 3.11, 3.12, 3.14)
+
+Visualization requires `jinja2` and `pygments`:
 ```bash
-# quick and dirty check
-python3 mosaic.py --check examples/hello.py | grep stdout | sort | uniq
+pip install jinja2 pygments
 ```
 
-```bash
-# interactive state explorer
-python3 mosaic.py --check examples/hello.py | python3 -m vis
-```
+---
 
-![](vis/demo.png)
+Copyright (c) 2024-2026 BlackRoad OS, Inc. All Rights Reserved.
 
-## Modeled System Calls
-
-System Call         | Behavior
---------------------|-----------------------------------------------
-`sys_fork()`        | create current thread's heap and context clone
-`sys_spawn(f, xs)`  | spawn a heap-sharing thread executing `f(xs)`
-`sys_write(xs)`     | write string `xs` to a shared console
-`sys_bread(k)`      | return the value of block id `k`
-`sys_bwrite(k, v)`  | write block `k` with value `v`
-`sys_sync()`        | persist all outstanding block writes
-`sys_sched()`       | perform a non-deterministic context switch
-`sys_choose(xs)`    | return a non-deterministic choice in `xs`
-`sys_crash()`       | perform a non-deterministic crash
-
-Limitation: system calls are implemented by `yield`. To keep the model checker minimal, one cannot perform system call in a function. (This is not a fundamental limitation and will be addressed in the future.)
-
-## Reproducing Results
-
-```bash
-python3 examples/_reproduce.py
-```
-
-Similar results in Table 2 are expected. Tested on: Python 3.10.9 (macOS Ventura), Python 3.11.2 (Ubuntu 22.04)
+Based on research from USENIX ATC'23 Paper #202.
